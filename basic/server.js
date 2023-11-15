@@ -1,61 +1,29 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const mime = require("mime");
-const cache = {};
-const chatServer = require("../lib/chat_server.js");
+import http from "http";
+import { loadIdByGuid } from "./SQL_config.js";
 
-function send404(response) {
-  response.writeHead(404, { "Content-Type": "text/plain" });
-  response.write("Error 404:resource not found.");
-  response.end();
-}
+const hostname = "127.0.0.1";
+const port = 3000;
 
-function sendFile(response, filePath, fileContents) {
-  response.writeHead(200, {
-    // "Content-Type": mime.lookup(path.basename(filePath)),
-    "Content-Type": mime.getType(path.basename(filePath)),
-  });
-  response.end(fileContents);
-}
+let conn = loadIdByGuid();
 
-function serverStatic(response, cache, absPath) {
-  // 判断内存中有没有
-  if (cache[absPath]) {
-    sendFile(response, absPath, cache[absPath]);
-  } else {
-    // 检测文件是否存在
-    fs.exists(absPath, function (exists) {
-      if (exists) {
-        fs.readFile(absPath, function (err, data) {
-          // 是否正确获取
-          if (err) {
-            send404(response);
-          } else {
-            cache[absPath] = data;
-            sendFile(response, absPath, data);
-          }
-        });
-      } else {
-        send404(response);
-      }
+let server = http.createServer((req, res, next) => {
+  // sql语句查询列表所有数据  SELECT * FROM 你数据库的表名，我这里是userList
+  let sql = "SELECT * FROM user_table";
+
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/json");
+  res.end("hello world");
+  // conn.query(sql, (err, r) => {
+  // res.json({ code: 200, data: r, msg: "成功" });
+  // console.log(err, r);
+  // });
+});
+conn
+  .then((res) => {
+    server.listen(port, hostname, () => {
+      console.log(`服务器运行在 http://${hostname}:${port}/`);
     });
-  }
-}
-
-const server = http.createServer(function (request, response) {
-  let filePath = false;
-  if (request == "/") {
-    filePath = "public/index.html";
-  } else {
-    filePath = "public" + request.url;
-  }
-  let absPath = "./" + filePath;
-  console.log(absPath);
-  serverStatic(response, cache, absPath);
-});
-
-server.listen(3000, function () {
-  console.log("Server listening on 3000");
-});
-chatServer.listen(server);
+  })
+  .catch((err) => {
+    // console.log(err);
+  });
