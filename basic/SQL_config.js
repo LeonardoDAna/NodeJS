@@ -1,50 +1,81 @@
-import mysql from "mysql";
+import fs from "fs";
 import { Client } from "ssh2";
-import { readFileSync } from "fs";
+import mysql2 from "mysql2";
 
-const client = new Client();
-let connection;
+const sshConfig = {
+  host: "122.51.48.31",
+  port: 22,
+  username: "root",
+  privateKey: fs.readFileSync("../privatekey/Leo.pem"),
+};
 
-client
-  .on("ready", () => {
-    console.log("Client :: ready");
-    client.exec("uptime", (err, stream) => {
-      if (err) throw err;
-      stream
-        .on("close", (code, signal) => {
-          console.log(
-            "Stream :: close :: code: " + code + ", signal: " + signal
-          );
-          client.end();
-        })
-        .on("data", (data) => {
-          console.log("STDOUT: " + data);
-        })
-        .stderr.on("data", (data) => {
-          console.log("STDERR: " + data);
-        });
+const dbConfig = {
+  host: "127.0.0.1",
+  port: 3306,
+  user: "mysqlAdmin",
+  // password: "Root@1234",
+  password: "wanghaoyu213458",
+  database: "mysql",
+};
 
-      //创建数据库连接
-      connection = mysql.createConnection({
-        host: "122.51.48.31", //主机IP
-        port: 3306, //端口号
-        user: "root", //用户名
-        password: "Root@1234", //密码
-        database: "mysql", //数据库名
-      });
-      //启动连接
-      connection.connect();
+async function connectSSH() {
+  const sshClient = new Client();
+  return new Promise((resolve, reject) => {
+    sshClient
+      .on("ready", () => {
+        console.log("SSH 连接成功");
+        resolve(sshClient);
+      })
+      .connect(sshConfig);
+
+    sshClient.on("error", (err) => {
+      reject(err);
     });
-  })
-  .connect({
-    host: "122.51.48.31",
-    port: 22,
-    username: "root",
-    privateKey: readFileSync("../privatekey/Leo.pem"),
   });
+}
 
-//执行sql语句，查询两条
-connection.query("select * from user_table ", function (error, result, fields) {
-  if (error) throw error;
-  console.log(result);
-});
+async function connectDatabase(sshClient) {
+  return new Promise((resolve, reject) => {
+    const mysqlClient = mysql2.createConnection({
+      host: "127.0.0.1",
+      port: 3306, // 使用隧道的本地端口
+      user: dbConfig.user,
+      password: dbConfig.password,
+      database: dbConfig.database,
+    });
+
+    sshClient.forwardOut("localhost", 3306, "localhost", 3306, (err) => {
+      if (err) reject(err);
+      console.log("隧道创建成功");
+      mysqlClient.connect((err) => {
+        if (err) reject(err);
+        console.log("MySQL 连接成功");
+        resolve(mysqlClient);
+      });
+    });
+  });
+}
+
+async function executeQuery() {
+  try {
+    const sshClient = await connectSSH();
+    const mysqlClient = await connectDatabase(sshClient);
+    const results = await new Promise((resolve, reject) => {
+      mysqlClient.query(
+        "SELECT * FROM user_table",
+        (error, results, fields) => {
+          if (error) reject(error);
+          resolve(results);
+        }
+      );
+    });
+    console.log("查询结果:", results);
+    mysqlClient.end();
+    sshClient.end();
+  } catch (error) {
+    console.error("连接过程中出现错误:", error);
+  }
+}
+
+executeQuery();
+//在上面的代码中，使用了 `import` 语句来引入所需的模块。然后，通过 `connectSSH` 函数建立 SSH 连接，使用 `connectDatabase` 函数在 SSH 连接中创建隧道并连接数据库。最后，通过 `executeQuery` 函数执行查询操作。这些函数都使用了 `async/await` 来处理异步操作。请注意，示例代码中的占位符需要替换为你自己的实际值。同时，确保你已经使用 npm 或 yarn 安装了所需的依赖模块（`ssh2` 和 `mysql`）。
