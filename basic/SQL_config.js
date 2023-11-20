@@ -1,6 +1,6 @@
+import { createClient } from "ssh2";
+import { createConnection } from "mysql2";
 import fs from "fs";
-import { Client } from "ssh2";
-import mysql2 from "mysql2";
 
 const sshConfig = {
   host: "122.51.48.31",
@@ -10,21 +10,19 @@ const sshConfig = {
 };
 
 const dbConfig = {
-  host: "127.0.0.1",
-  port: 3306,
-  user: "mysqlAdmin",
-  // password: "Root@1234",
-  password: "wanghaoyu213458",
+  host: "localhost", // 在SSH隧道中连接本地主机
+  user: "root",
+  password: "Root@1234",
   database: "mysql",
 };
 
-async function connectSSH() {
-  const sshClient = new Client();
-  return new Promise((resolve, reject) => {
+async function connectSSHAndDatabase() {
+  const sshClient = createClient();
+  await new Promise((resolve, reject) => {
     sshClient
       .on("ready", () => {
         console.log("SSH 连接成功");
-        resolve(sshClient);
+        resolve();
       })
       .connect(sshConfig);
 
@@ -32,50 +30,33 @@ async function connectSSH() {
       reject(err);
     });
   });
-}
 
-async function connectDatabase(sshClient) {
-  return new Promise((resolve, reject) => {
-    const mysqlClient = mysql2.createConnection({
-      host: "127.0.0.1",
-      port: 3306, // 使用隧道的本地端口
-      user: dbConfig.user,
-      password: dbConfig.password,
-      database: dbConfig.database,
-    });
-
-    sshClient.forwardOut("localhost", 3306, "localhost", 3306, (err) => {
-      if (err) reject(err);
-      console.log("隧道创建成功");
-      mysqlClient.connect((err) => {
-        if (err) reject(err);
-        console.log("MySQL 连接成功");
-        resolve(mysqlClient);
-      });
-    });
+  const mysqlConnection = await createConnection({
+    host: "localhost", // 使用隧道的本地主机名
+    user: dbConfig.user,
+    password: dbConfig.password,
+    database: dbConfig.database,
+    ssh: {
+      host: sshConfig.host,
+      user: sshConfig.username,
+      privateKey: sshConfig.privateKey,
+    },
   });
+
+  console.log("MySQL 连接成功");
+  return mysqlConnection;
 }
 
 async function executeQuery() {
   try {
-    const sshClient = await connectSSH();
-    const mysqlClient = await connectDatabase(sshClient);
-    const results = await new Promise((resolve, reject) => {
-      mysqlClient.query(
-        "SELECT * FROM user_table",
-        (error, results, fields) => {
-          if (error) reject(error);
-          resolve(results);
-        }
-      );
-    });
-    console.log("查询结果:", results);
-    mysqlClient.end();
-    sshClient.end();
+    const connection = await connectSSHAndDatabase();
+    const [rows, fields] = await connection.execute("SELECT * FROM user_table");
+    console.log("查询结果:", rows);
+    connection.end();
   } catch (error) {
     console.error("连接过程中出现错误:", error);
   }
 }
 
 executeQuery();
-//在上面的代码中，使用了 `import` 语句来引入所需的模块。然后，通过 `connectSSH` 函数建立 SSH 连接，使用 `connectDatabase` 函数在 SSH 连接中创建隧道并连接数据库。最后，通过 `executeQuery` 函数执行查询操作。这些函数都使用了 `async/await` 来处理异步操作。请注意，示例代码中的占位符需要替换为你自己的实际值。同时，确保你已经使用 npm 或 yarn 安装了所需的依赖模块（`ssh2` 和 `mysql`）。
+// 当你运行上述代码时，它会连接到SSH服务器，并在SSH隧道中创建一个到MySQL数据库的连接。然后，它执行一个示例查询并输出结果。请确保将占位符（如'your_ssh_host'、'your_db_username'等）替换为你自己的实际值。同时，确保私钥文件的路径正确，并且私钥的权限设置正确（通常只有用户可读）。`mysql2`插件在创建连接时使用了SSH配置，以便通过SSH隧道连接到数据库。这样，你就可以使用Node.js连接到部署在SSH协议上的Linux上的数据库了。`ssh2`插件负责SSH连接，而`mysql2`插件则处理与MySQL数据库的连接和查询执行。
