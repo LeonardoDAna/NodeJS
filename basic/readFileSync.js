@@ -13,64 +13,46 @@ const sshConfig = {
   ),
 };
 
-async function connectSSH() {
-  const sshClient = new Client();
-  return new Promise((resolve, reject) => {
-    sshClient.connect(sshConfig, (err) => {
-      console.log(err);
-      if (err) reject(err);
-      console.log("SSH 连接成功");
-      resolve(sshClient);
-    });
-  });
-}
+const conn = new Client();
+conn
+  .on("ready", () => {
+    console.log("Client :: ready");
 
-async function connectDatabase(sshClient) {
-  return new Promise((resolve, reject) => {
-    sshClient.forwardOut(
-      "localhost",
-      3307,
-      "localhost",
-      3306,
-      (err, stream) => {
-        if (err) reject(err);
-        console.log("隧道创建成功");
-        const mysqlClient = mysql.createConnection({
-          host: "localhost",
-          port: 3306,
-          user: dbConfig.user,
-          password: dbConfig.password,
-          database: dbConfig.database,
-        });
-        mysqlClient.connect((err) => {
-          if (err) reject(err);
-          console.log("MySQL 连接成功");
-          resolve(mysqlClient);
-        });
-      }
-    );
-  });
-}
-async function executeQuery() {
-  try {
-    const sshClient = await connectSSH();
-    console.log(sshClient);
-    const mysqlClient = await connectDatabase(sshClient);
-    const results = await new Promise((resolve, reject) => {
-      mysqlClient.query(
-        "SELECT * FROM user_table",
-        (error, results, fields) => {
-          if (error) reject(error);
-          resolve(results);
-        }
-      );
+    //执行命令
+    /*  conn.exec('ls', (err, stream) => {
+    if (err) throw err;
+    stream.on('close', (code, signal) => {
+      console.log('Stream :: close :: code: ' + code + ', signal: ' + signal);
+      conn.end();
+    }).on('data', (data) => {
+      console.log('STDOUT: ' + data);
+    }).stderr.on('data', (data) => {
+      console.log('STDERR: ' + data);
     });
-    console.log("查询结果:", results);
-    mysqlClient.end();
-    sshClient.end();
-  } catch (error) {
-    console.error("连接过程中出现错误:", error);
-  }
-}
+  }); */
 
-executeQuery();
+    //获取目录
+    /* conn.sftp((err, sftp) => {
+    if (err) throw err;
+    sftp.readdir('/home', (err, list) => {
+      if (err) throw err;
+      console.dir(list);
+      conn.end();
+    });
+  }); */
+
+    //执行多个命令
+    conn.shell((err, stream) => {
+      if (err) throw err;
+      stream
+        .on("close", () => {
+          console.log("Stream :: close");
+          conn.end();
+        })
+        .on("data", (data) => {
+          console.log("OUTPUT: " + data);
+        });
+      stream.end("cd /home\nls\ntouch fff.txt\n");
+    });
+  })
+  .connect(sshConfig);
