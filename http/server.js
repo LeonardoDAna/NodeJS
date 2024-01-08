@@ -2,19 +2,19 @@ const http = require("http");
 const mySQL = require("mysql");
 
 const db = mySQL.createConnection({
-  host: "122.51.48.31",
+  host: "localhost",
   port: "3306", //数据库端口
   user: "root",
-  password: "",
-  database: "user",
+  password: "Root@1234",
+  database: "mysql",
 });
 
-const hostname = "127.0.0.1";
+const hostname = "localhost";
 const port = 3000;
 
 db.connect((error) => {
   if (error) {
-    console.error("Error connecting to MySQL database: " + error);
+    console.error("Error connecting to MySQL dtabase: a" + error);
     return;
   }
   console.log("Connected to MySQL database!");

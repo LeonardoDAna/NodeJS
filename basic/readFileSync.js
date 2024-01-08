@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const { Client } = require("ssh2");
 const mysql = require("mysql");
 
@@ -6,15 +7,10 @@ const sshConfig = {
   host: "122.51.48.31",
   port: 22,
   username: "root",
-  privateKey: fs.readFileSync("../privatekey/Leo.pem"),
-};
-
-const dbConfig = {
-  host: "localhost",
-  port: 3306,
-  user: "root",
-  password: "Root@1234",
-  database: "mysql",
+  privateKey: fs.readFileSync(
+    path.resolve(__dirname, "../privatekey/Leo.pem"),
+    "UTF-8"
+  ),
 };
 
 async function connectSSH() {
@@ -55,7 +51,6 @@ async function connectDatabase(sshClient) {
     );
   });
 }
-
 async function executeQuery() {
   try {
     const sshClient = await connectSSH();
